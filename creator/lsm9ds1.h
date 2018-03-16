@@ -32,6 +32,10 @@ Distributed as-is; no warranty is given.
 
 enum lsm9ds1_axis { X_AXIS, Y_AXIS, Z_AXIS, ALL_AXIS };
 
+const float kGyroOffsetX = -2.86995;
+const float kGyroOffsetY = -3.00873;
+const float kGyroOffsetZ = 1.0152;
+
 class LSM9DS1 {
  public:
   IMUSettings settings;
