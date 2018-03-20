@@ -27,6 +27,18 @@ Distributed as-is; no warranty is given.
 
 #define LSM9DS1_COMMUNICATION_TIMEOUT 1000
 
+#define SENSITIVITY_ACCELEROMETER_2  0.000061
+#define SENSITIVITY_ACCELEROMETER_4  0.000122
+#define SENSITIVITY_ACCELEROMETER_8  0.000244
+#define SENSITIVITY_ACCELEROMETER_16 0.000732
+#define SENSITIVITY_GYROSCOPE_245    0.00875
+#define SENSITIVITY_GYROSCOPE_500    0.0175
+#define SENSITIVITY_GYROSCOPE_2000   0.07
+#define SENSITIVITY_MAGNETOMETER_4   0.00014
+#define SENSITIVITY_MAGNETOMETER_8   0.00029
+#define SENSITIVITY_MAGNETOMETER_12  0.00043
+#define SENSITIVITY_MAGNETOMETER_16  0.00058
+
 float magSensitivity[4] = {0.00014, 0.00029, 0.00043, 0.00058};
 
 LSM9DS1::LSM9DS1(creator::I2C* i2c) : i2c_(i2c) {
@@ -463,7 +475,7 @@ uint8_t LSM9DS1::magAvailable(lsm9ds1_axis axis) {
 
 void LSM9DS1::readAccel() {
   uint8_t temp[6];  // We'll read six bytes from the accelerometer into temp
-  xgReadBytes(OUT_X_L_XL, temp, 6);  // Read 6 bytes, beginning at OUT_X_L_XL
+  if (xgReadBytes(OUT_X_L_XL, temp, 6) == 6){  // Read 6 bytes, beginning at OUT_X_L_XL
   ax = (temp[1] << 8) | temp[0];     // Store x-axis values into ax
   ay = (temp[3] << 8) | temp[2];     // Store y-axis values into ay
   az = (temp[5] << 8) | temp[4];     // Store z-axis values into az
@@ -471,44 +483,50 @@ void LSM9DS1::readAccel() {
     ax -= aBiasRaw[X_AXIS];
     ay -= aBiasRaw[Y_AXIS];
     az -= aBiasRaw[Z_AXIS];
-  }
+  		}
+	}
 }
-
 int16_t LSM9DS1::readAccel(lsm9ds1_axis axis) {
   uint8_t temp[2];
   int16_t value;
-  xgReadBytes(OUT_X_L_XL + (2 * axis), temp, 2);
+  if (xgReadBytes(OUT_X_L_XL + (2 * axis), temp, 2) == 2){
   value = (temp[1] << 8) | temp[0];
 
   if (_autoCalc) value -= aBiasRaw[axis];
 
   return value;
+  }
+  return 0;
 }
 
 void LSM9DS1::readMag() {
   uint8_t temp[6];  // We'll read six bytes from the mag into temp
-  mReadBytes(OUT_X_L_M, temp, 6);  // Read 6 bytes, beginning at OUT_X_L_M
+  if (mReadBytes(OUT_X_L_M, temp, 6) == 6){  // Read 6 bytes, beginning at OUT_X_L_M
   mx = (temp[1] << 8) | temp[0];   // Store x-axis values into mx
   my = (temp[3] << 8) | temp[2];   // Store y-axis values into my
   mz = (temp[5] << 8) | temp[4];   // Store z-axis values into mz
+  }
 }
 
 int16_t LSM9DS1::readMag(lsm9ds1_axis axis) {
   uint8_t temp[2];
-  mReadBytes(OUT_X_L_M + (2 * axis), temp, 2);
+  if (mReadBytes(OUT_X_L_M + (2 * axis), temp, 2) == 2){
   return (temp[1] << 8) | temp[0];
+  }
+  return 0;
 }
 
 void LSM9DS1::readTemp() {
   uint8_t
       temp[2];  // We'll read two bytes from the temperature sensor into temp
-  xgReadBytes(OUT_TEMP_L, temp, 2);  // Read 2 bytes, beginning at OUT_TEMP_L
+  if (xgReadBytes(OUT_TEMP_L, temp, 2) == 2){  // Read 2 bytes, beginning at OUT_TEMP_L
   temperature = ((int16_t)temp[1] << 8) | temp[0];
+  }
 }
 
 void LSM9DS1::readGyro() {
   uint8_t temp[6];  // We'll read six bytes from the gyro into temp
-  xgReadBytes(OUT_X_L_G, temp, 6);  // Read 6 bytes, beginning at OUT_X_L_G
+  if (xgReadBytes(OUT_X_L_G, temp, 6) == 6){  // Read 6 bytes, beginning at OUT_X_L_G
   gx = (temp[1] << 8) | temp[0];    // Store x-axis values into gx
   gy = (temp[3] << 8) | temp[2];    // Store y-axis values into gy
   gz = (temp[5] << 8) | temp[4];    // Store z-axis values into gz
@@ -516,20 +534,23 @@ void LSM9DS1::readGyro() {
     gx -= gBiasRaw[X_AXIS];
     gy -= gBiasRaw[Y_AXIS];
     gz -= gBiasRaw[Z_AXIS];
+    }
   }
+
 }
 
 int16_t LSM9DS1::readGyro(lsm9ds1_axis axis) {
   uint8_t temp[2];
   int16_t value;
 
-  xgReadBytes(OUT_X_L_G + (2 * axis), temp, 2);
+  if (xgReadBytes(OUT_X_L_G + (2 * axis), temp, 2) == 2){
 
-  value = (temp[1] << 8) | temp[0];
+    value = (temp[1] << 8) | temp[0];
 
-  if (_autoCalc) value -= gBiasRaw[axis];
-
-  return value;
+    if (_autoCalc) value -= gBiasRaw[axis];
+    return value;
+  }
+  return 0;
 }
 
 float LSM9DS1::calcGyro(int16_t gyro) {
@@ -675,26 +696,57 @@ void LSM9DS1::setMagODR(uint8_t mRate) {
   mWriteByte(CTRL_REG1_M, temp);
 }
 
-void LSM9DS1::calcgRes() { gRes = ((float)settings.gyro.scale) / 32768.0; }
+void LSM9DS1::calcgRes() { //gRes = ((float)settings.gyro.scale) / 32768.0; }
+  switch (settings.gyro.scale){
+  case 245:
+    gRes = SENSITIVITY_GYROSCOPE_245;
+    break;
+  case 500:
+    gRes = SENSITIVITY_GYROSCOPE_500;
+    break;
+  case 2000:
+    gRes = SENSITIVITY_GYROSCOPE_2000;
+    break;
+  default:
+    break;
+  }
+}
 
-void LSM9DS1::calcaRes() { aRes = ((float)settings.accel.scale) / 32768.0; }
+void LSM9DS1::calcaRes() { //aRes = ((float)settings.accel.scale) / 32768.0; }
+  switch (settings.accel.scale){
+  case 2:
+    aRes = SENSITIVITY_ACCELEROMETER_2;
+    break;
+  case 4:
+    aRes = SENSITIVITY_ACCELEROMETER_4;
+    break;
+  case 8:
+    aRes = SENSITIVITY_ACCELEROMETER_8;
+    break;
+  case 16:
+    aRes = SENSITIVITY_ACCELEROMETER_16;
+    break;
+  default:
+    break;
+  }
+}
 
 void LSM9DS1::calcmRes() {
   // mRes = ((float) settings.mag.scale) / 32768.0;
-  switch (settings.mag.scale) {
-    case 4:
-      mRes = magSensitivity[0];
-      break;
-    case 8:
-      mRes = magSensitivity[1];
-      break;
-    case 12:
-      mRes = magSensitivity[2];
-      break;
-    case 16:
-      mRes = magSensitivity[3];
-      break;
-  }
+  switch (settings.mag.scale){
+  case 4:
+    mRes = SENSITIVITY_MAGNETOMETER_4;
+    break;
+  case 8:
+    mRes = SENSITIVITY_MAGNETOMETER_8;
+    break;
+  case 12:
+    mRes = SENSITIVITY_MAGNETOMETER_12;
+    break;
+  case 16:
+    mRes = SENSITIVITY_MAGNETOMETER_16;
+    break;
+  } 
 }
 
 void LSM9DS1::configInt(interrupt_select interrupt, uint8_t generator,
@@ -895,14 +947,14 @@ uint8_t LSM9DS1::xgReadByte(uint8_t subAddress) {
   return i2c_->ReadByte(_xgAddress, subAddress);
 }
 
-void LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count) {
-  i2c_->ReadBytes(_xgAddress, subAddress, dest, count);
+uint8_t LSM9DS1::xgReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count) {
+  return i2c_->ReadBytes(_xgAddress, subAddress, dest, count);
 }
 
 uint8_t LSM9DS1::mReadByte(uint8_t subAddress) {
   return i2c_->ReadByte(_mAddress, subAddress);
 }
 
-void LSM9DS1::mReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count) {
-  i2c_->ReadBytes(_mAddress, subAddress, dest, count);
+uint8_t LSM9DS1::mReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count) {
+  return i2c_->ReadBytes(_mAddress, subAddress, dest, count);
 }

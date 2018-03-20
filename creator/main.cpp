@@ -98,8 +98,8 @@ static WORKING_AREA(waIMUThread, 512);
 static msg_t IMUThread(void *arg) {
   (void)arg;
   LSM9DS1 imu(&i2c, IMU_MODE_I2C, 0x6A, 0x1C);
-  int time = 0;
-  int deltaTime = 0;
+  //int time = 0;
+  int deltaTime = 20;
 
   imu.begin();
 
@@ -107,7 +107,7 @@ static msg_t IMUThread(void *arg) {
 
   while (true) {
 
-    time = chTimeNow();
+    //time = chTimeNow();
     imu.readGyro();
     data.gyro_x = (imu.calcGyro(imu.gx) - kGyroOffsetX) * M_PI/180;
     data.gyro_y = (imu.calcGyro(imu.gy) - kGyroOffsetY) * M_PI/180;
@@ -130,10 +130,10 @@ static msg_t IMUThread(void *arg) {
                                            data.accel_z * data.accel_z) * 
                 180.0 / M_PI;
 
-    deltaTime = 20;
+    
     //deltaTime = time - chTimeNow();
 
-    data.yaw = (float)deltaTime;
+    data.yaw = 0;
     data.roll =  0.94 *(data.roll + data.gyro_x * (deltaTime/1000) ) + 0.06 * roll_ang;
     data.pitch = 0.94 *(data.pitch + data.gyro_y * (deltaTime/1000) ) + 0.06 * pitch_ang;
 

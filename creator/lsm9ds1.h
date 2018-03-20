@@ -94,7 +94,7 @@ class LSM9DS1 {
   //			0 - No new data available
   uint8_t gyroAvailable();
 
-  // gyroAvailable() -- Polls the temperature status register to check
+  // tempAvailable() -- Polls the temperature status register to check
   // if new data is available.
   // Output:	1 - New data available
   //			0 - No new data available
@@ -413,7 +413,7 @@ class LSM9DS1 {
   //	- count = The number of bytes to be read.
   // Output: No value is returned, but the `dest` array will store
   // 	the data read upon exit.
-  void mReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count);
+  uint8_t mReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count);
 
   // gWriteByte() -- Write a byte to a register in the gyroscope.
   // Input:
@@ -437,7 +437,7 @@ class LSM9DS1 {
   //	- count = The number of bytes to be read.
   // Output: No value is returned, but the `dest` array will store
   // 	the data read upon exit.
-  void xgReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count);
+  uint8_t xgReadBytes(uint8_t subAddress, uint8_t* dest, uint8_t count);
 
   // xmWriteByte() -- Write a byte to a register in the accel/mag sensor.
   // Input:
