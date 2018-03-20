@@ -45,7 +45,7 @@ const uint32_t kFirmwareVersion = 0x171017; /* 0xYYMMDD */
 /* Global objects */
 creator::I2C i2c;  // TODO(andres.calderon@admobilize.com): avoid global objects
 
-void psram_copy(uint8_t mem_offset, char *data, uint8_t len) {
+void psram_copy(uint16_t mem_offset, char *data, uint8_t len) {
   register char *psram = (char *)PSRAM_BASE_ADDRESS;
 
   for (int i = 0; i < len; i++) {
@@ -94,9 +94,64 @@ static msg_t EnvThread(void *arg) {
   return (0);
 }
 
+//PWM 
+
+void set_period (PWMData *data,char d1, char d2, char d3){ 
+  data->period_1=d1;  
+  data->period_2=d2;
+  data->period_3=d3;   
+  psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+}
+
+void set_duty (PWMData *data,char motor,char d1, char d2, char d3){
+  switch(motor){
+  case 1:
+    data->duty1_1   = d1;
+    data->duty1_2   = d2;
+    data->duty1_3   = d3;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+  break;
+  case 2:
+    data->duty2_1   = d1;
+    data->duty2_2   = d2;
+    data->duty2_3   = d3;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+  break;
+  case 3:
+    data->duty3_1   = d1;
+    data->duty3_2   = d2;
+    data->duty3_3   = d3;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+  break;
+  case 4:
+    data->duty4_1   = d1;
+    data->duty4_2   = d2;
+    data->duty4_3   = d3;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+  break;
+  default:
+    data->duty1_1   = 0;
+    data->duty1_2   = 0;
+    data->duty1_3   = 0;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
+  }
+}
+
+
+void initMotors(PWMData *data)
+{
+    set_period(data,0x3D,0X09,0X00);
+    set_duty (data,1,0x03,0X0D,0X40);
+    set_duty (data,2,0x03,0X0D,0X40);
+    set_duty (data,3,0x03,0X0D,0X40);
+    set_duty (data,4,0x03,0X0D,0X40);
+    //chThdSleepMilliseconds(3000);     
+}
+
 static WORKING_AREA(waIMUThread, 512);
 static msg_t IMUThread(void *arg) {
   (void)arg;
+
   LSM9DS1 imu(&i2c, IMU_MODE_I2C, 0x6A, 0x1C);
   //int time = 0;
   int deltaTime = 20;
@@ -104,6 +159,9 @@ static msg_t IMUThread(void *arg) {
   imu.begin();
 
   IMUData data;
+  PWMData pwmdata;
+
+  initMotors(&pwmdata);
 
   while (true) {
 
@@ -139,7 +197,6 @@ static msg_t IMUThread(void *arg) {
 
     psram_copy(mem_offset_imu, (char *)&data, sizeof(data));
 
-
     chThdSleepMilliseconds(deltaTime);
 
     WDT_Restart( WDT ) ;
@@ -151,6 +208,8 @@ static msg_t IMUThread(void *arg) {
  * Application entry point.
  */
 int main(void) {
+
+
   halInit();
 
   chSysInit();
@@ -162,6 +221,7 @@ int main(void) {
   BOARD_ConfigurePSRAM(SMC);
 
   i2c.Init();
+
   /* Creates the imu thread. */
   chThdCreateStatic(waIMUThread, sizeof(waIMUThread), NORMALPRIO, IMUThread,
                     NULL);
