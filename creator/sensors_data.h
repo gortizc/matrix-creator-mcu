@@ -43,6 +43,9 @@ struct IMUData {
   float mag_x;
   float mag_y;
   float mag_z;
+  float adcRead;
+  float adcOut;
+  float pwmBase;
 };
 
 struct MCUData {
@@ -66,6 +69,10 @@ struct PWMData {
   uint8_t duty4_1; 
   uint8_t duty4_2;
   uint8_t duty4_3;
+};
+
+struct ADCData {
+  int channel_1;
 };
 
 #endif  // CPP_DRIVER_PRESSURE_DATA_H_

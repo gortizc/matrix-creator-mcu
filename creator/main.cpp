@@ -22,6 +22,7 @@
 #include "hal.h"
 #include "board.h"
 #include "wdt.h"
+#include "chprintf.h"
 
 
 #include <math.h>
@@ -37,6 +38,8 @@
 
 extern "C" {
 #include "atmel_psram.h"
+
+#include "atmel_adc.h"
 }
 
 const uint32_t kFirmwareCreatorID = 0x10;
@@ -137,65 +140,118 @@ void set_duty (PWMData *data,char motor,char d1, char d2, char d3){
   }
 }
 
-
-void initMotors(PWMData *data)
-{
-    set_period(data,0x3D,0X09,0X00);
-    set_duty (data,1,0x03,0X0D,0X40);
-    set_duty (data,2,0x03,0X0D,0X40);
-    set_duty (data,3,0x03,0X0D,0X40);
-    set_duty (data,4,0x03,0X0D,0X40);
-    //chThdSleepMilliseconds(3000);     
+void set_dutyBase (PWMData *data,char d1, char d2, char d3){
+    data->duty1_1   = d1;
+    data->duty1_2   = d2;
+    data->duty1_3   = d3;
+    data->duty2_1   = d1;
+    data->duty2_2   = d2;
+    data->duty2_3   = d3;
+    data->duty3_1   = d1;
+    data->duty3_2   = d2;
+    data->duty3_3   = d3;
+    data->duty4_1   = d1;
+    data->duty4_2   = d2;
+    data->duty4_3   = d3;
+    psram_copy(mem_offset_pwm,(char  *)data, sizeof(*data));
 }
 
 static WORKING_AREA(waIMUThread, 512);
 static msg_t IMUThread(void *arg) {
   (void)arg;
 
-  LSM9DS1 imu(&i2c, IMU_MODE_I2C, 0x6A, 0x1C);
-  //int time = 0;
   int deltaTime = 20;
+  float alpha = 0.03;
+  int topControl = 460;
+  int downControl = 230;
+  int stepControl = (topControl - downControl)/8;
 
-  imu.begin();
-
-  IMUData data;
+  IMUData imudata;
   PWMData pwmdata;
 
-  initMotors(&pwmdata);
+  //Init IMU
+  LSM9DS1 imu(&i2c, IMU_MODE_I2C, 0x6A, 0x1C);
+  imu.begin();
+
+  //Init ADC Control Remoto FlySky
+  ADC_Initialize( ADC);
+  ADC_cfgFrequency( ADC, 15, 11 ); //
+  ADC->ADC_CHER = 0x00000003;  // Enable Channels 0, 1, 4, 5 
+  ADC->ADC_MR |= 0x80;
+  ADC_StartConversion(ADC);
+
+  //Init Motors  
+  set_period(&pwmdata,0x3D,0X09,0X00);
+  set_duty (&pwmdata,1,0x02,0x4B,0X67);
+  set_duty (&pwmdata,2,0x02,0x4B,0X67);
+  set_duty (&pwmdata,3,0x02,0x4B,0X67);
+  set_duty (&pwmdata,4,0x02,0x4B,0X67);
+  chThdSleepMilliseconds(500); 
 
   while (true) {
 
-    //time = chTimeNow();
     imu.readGyro();
-    data.gyro_x = (imu.calcGyro(imu.gx) - kGyroOffsetX) * M_PI/180;
-    data.gyro_y = (imu.calcGyro(imu.gy) - kGyroOffsetY) * M_PI/180;
-    data.gyro_z = (imu.calcGyro(imu.gz) - kGyroOffsetZ) * M_PI/180;
+    imudata.gyro_x = (imu.calcGyro(imu.gx) - kGyroOffsetX) * M_PI/180;
+    imudata.gyro_y = (imu.calcGyro(imu.gy) - kGyroOffsetY) * M_PI/180;
+    imudata.gyro_z = (imu.calcGyro(imu.gz) - kGyroOffsetZ) * M_PI/180;
 
     imu.readMag();
-    data.mag_x = imu.calcMag(imu.mx);
-    data.mag_y = imu.calcMag(imu.my);
-    data.mag_z = imu.calcMag(imu.mz);
+    imudata.mag_x = imu.calcMag(imu.mx);
+    imudata.mag_y = imu.calcMag(imu.my);
+    imudata.mag_z = imu.calcMag(imu.mz);
 
     imu.readAccel();
-    data.accel_x = imu.calcAccel(imu.ax);
-    data.accel_y = imu.calcAccel(imu.ay);
-    data.accel_z = imu.calcAccel(imu.az);
+    imudata.accel_x = imu.calcAccel(imu.ax);
+    imudata.accel_y = imu.calcAccel(imu.ay);
+    imudata.accel_z = imu.calcAccel(imu.az);
 
-    float pitch_ang = atan2(-data.accel_x, sqrt(data.accel_y * data.accel_y +
-                                           data.accel_z * data.accel_z)) *
+    float pitch_ang = atan2(-imudata.accel_x, sqrt(imudata.accel_y * imudata.accel_y +
+                                           imudata.accel_z * imudata.accel_z)) *
                  180.0 / M_PI;
-    float roll_ang = atan2(data.accel_y, data.accel_x * data.accel_x + 
-                                           data.accel_z * data.accel_z) * 
+    float roll_ang = atan2(imudata.accel_y, imudata.accel_x * imudata.accel_x + 
+                                           imudata.accel_z * imudata.accel_z) * 
                 180.0 / M_PI;
 
-    
-    //deltaTime = time - chTimeNow();
+    imudata.yaw = 0;
+    imudata.roll =  0.94 *(imudata.roll + imudata.gyro_x * (deltaTime/1000) ) + 0.06 * roll_ang;
+    imudata.pitch = 0.94 *(imudata.pitch + imudata.gyro_y * (deltaTime/1000) ) + 0.06 * pitch_ang;
 
-    data.yaw = 0;
-    data.roll =  0.94 *(data.roll + data.gyro_x * (deltaTime/1000) ) + 0.06 * roll_ang;
-    data.pitch = 0.94 *(data.pitch + data.gyro_y * (deltaTime/1000) ) + 0.06 * pitch_ang;
+    //ADC read - Remote Control FlySky.
+    while( !( (ADC->ADC_ISR & ADC_ISR_EOC0) ) ) ;
+    ADC_StartConversion( ADC ) ;
+    imudata.adcRead = (ADC->ADC_CDR[1]);
+    imudata.adcOut = (imudata.adcRead*alpha+(1-alpha)*imudata.adcOut);
 
-    psram_copy(mem_offset_imu, (char *)&data, sizeof(data));
+    //PWM Base step to step controlled by Remote Control FlySky.
+    if(imudata.adcOut > downControl && imudata.adcOut <= downControl+stepControl){
+      set_dutyBase (&pwmdata,0x02,0x4B,0X67);
+      imudata.pwmBase = 1000;}
+    else if (imudata.adcOut > downControl+stepControl && imudata.adcOut <= downControl+2*stepControl){
+      set_dutyBase (&pwmdata,0x02,0X86,0X24);
+      imudata.pwmBase = 1100;}
+    else if (imudata.adcOut > downControl+2*stepControl && imudata.adcOut <= downControl+3*stepControl){
+      set_dutyBase (&pwmdata,0x02,0XC0,0XE2);
+      imudata.pwmBase = 1200;}
+    else if (imudata.adcOut > downControl+3*stepControl && imudata.adcOut <= downControl+4*stepControl){
+      set_dutyBase (&pwmdata,0x02,0XFB,0X8F);
+      imudata.pwmBase = 1300;}
+    else if (imudata.adcOut > downControl+4*stepControl && imudata.adcOut <= downControl+5*stepControl){
+      set_dutyBase (&pwmdata,0x03,0X36,0X5D);
+      imudata.pwmBase = 1400;}
+    else if (imudata.adcOut > downControl+5*stepControl && imudata.adcOut <= downControl+6*stepControl){
+      set_dutyBase (&pwmdata,0x03,0X71,0X1A);
+      imudata.pwmBase = 1500;}
+    else if (imudata.adcOut > downControl+6*stepControl && imudata.adcOut <= downControl+7*stepControl){
+      set_dutyBase (&pwmdata,0x03,0XAB,0XD8);
+      imudata.pwmBase = 1600;}
+    else if (imudata.adcOut > downControl+7*stepControl && imudata.adcOut <= topControl){
+      set_dutyBase (&pwmdata,0x03,0XE6,0X95);
+      imudata.pwmBase = 1700;}
+    else{
+      imudata.pwmBase = 1000;
+    }
+
+    psram_copy(mem_offset_imu, (char *)&imudata, sizeof(imudata));
 
     chThdSleepMilliseconds(deltaTime);
 
